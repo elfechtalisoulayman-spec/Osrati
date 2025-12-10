@@ -9,7 +9,6 @@ import React, {
 import { AppData } from '../types';
 import { syncWithCloud } from '../services/googleSheetsService';
 
-// البيانات الأولية الفارغة
 const INITIAL_DATA: AppData = {
   users: [],
   habits: [],
@@ -25,16 +24,14 @@ interface AppContextType {
   triggerSync: () => void;
 }
 
-// ننشئ الكونتكست
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 interface AppProviderProps {
   children: ReactNode;
 }
 
-// هذا هو المزود الرئيسي الذي سيلفّ التطبيق كله
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  // 1) نقرأ من localStorage عند أول تحميل للتطبيق (Offline First)
+  // نقرأ من localStorage مرة واحدة عند بداية التطبيق
   const [data, setData] = useState<AppData>(() => {
     if (typeof window === 'undefined') return INITIAL_DATA;
     try {
@@ -47,7 +44,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // 2) أي تغيير في data نحفظه فوراً في localStorage
+  // أي تغيير في data يتم حفظه محلياً فوراً
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -58,7 +55,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [data]);
 
-  // 3) دالة المزامنة اليدوية / التلقائية مع Google Sheets
+  // مزامنة مع السحابة
   const triggerSync = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
@@ -66,7 +63,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const cloudData = await syncWithCloud(data);
 
     if (cloudData) {
-      // هنا نعتمد بيانات السحابة بالكامل (يمكن تطوير منطق الدمج لاحقاً)
+      // Apps Script يقوم بدمج البيانات، لذا نعتمد ما يرجع من السحابة
       setData(cloudData);
       try {
         localStorage.setItem('osrati_db', JSON.stringify(cloudData));
@@ -78,19 +75,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setIsSyncing(false);
   };
 
-  // 4) مزامنة أولية عند فتح التطبيق + كل 5 دقائق مثلاً
+  // مزامنة أولية + كل 5 دقائق
   useEffect(() => {
     triggerSync();
-    const interval = setInterval(triggerSync, 5 * 60 * 1000); // كل 5 دقائق
+    const interval = setInterval(triggerSync, 5 * 60 * 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 5) دالة لتحديث البيانات من أي كومبوننت (تحدّث local ثم تحاول المزامنة)
+  // تحديث البيانات من أي كومبوننت
   const updateData = (newData: Partial<AppData>) => {
     setData(prev => {
       const updated = { ...prev, ...newData };
-      // محاولة مزامنة خفيفة بعد ثانية (بدون إزعاج الواجهة)
+      // محاولة مزامنة بعد ثانية (بدون إزعاج الواجهة)
       setTimeout(() => {
         triggerSync();
       }, 1000);
@@ -105,7 +102,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   );
 };
 
-// هوك مريح لاستخدام الكونتكست داخل أي كومبوننت
 export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
   if (!context) {
